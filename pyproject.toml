@@ -9,7 +9,7 @@ description = "pyplayready CDM (Content Decryption Module) implementation in Pyt
 license = "CC BY-NC-ND 4.0"
 authors = ["DevLARLEY, Erevoc", "DevataDev"]
 readme = "README.md"
-repository = "https://github.com/ready-dl/pyplayready"
+repository = "https://git.gay/ready-dl/pyplayready"
 keywords = ["python", "drm", "playready", "microsoft"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -27,7 +27,7 @@ include = [
 ]
 
 [tool.poetry.urls]
-"Issues" = "https://github.com/ready-dl/pyplayready/issues"
+"Issues" = "https://git.gay/ready-dl/pyplayready/issues"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"

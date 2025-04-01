@@ -219,7 +219,7 @@ async def authentication(request: web.Request, handler: Handler) -> web.Response
             response = web.json_response({"message": e.reason}, status=500)
 
     response.headers.update({
-        "Server": f"https://github.com/ready-dl/pyplayready serve v{__version__}"
+        "Server": f"https://git.gay/ready-dl/pyplayready serve v{__version__}"
     })
 
     return response
