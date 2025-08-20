@@ -1,3 +1,5 @@
+from pyplayready.misc.drmresults import DrmResult
+
 class PyPlayreadyException(Exception):
     """Exceptions used by pyplayready."""
 

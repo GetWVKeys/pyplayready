@@ -8,7 +8,7 @@ from pyplayready import __version__, PSSH
 from pyplayready.cdm import Cdm
 from pyplayready.device import Device
 
-from pyplayready.exceptions import (InvalidSession, TooManySessions, InvalidLicense, InvalidPssh)
+from pyplayready.misc.exceptions import (InvalidSession, TooManySessions, InvalidLicense, InvalidPssh)
 
 routes = web.RouteTableDef()
 

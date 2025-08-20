@@ -9,6 +9,8 @@ from pyplayready.remote.remotecdm import *
 from pyplayready.system.bcert import *
 from pyplayready.system.pssh import *
 from pyplayready.system.session import *
+from pyplayready.misc.drmresults import *
+from pyplayready.misc.exceptions import *
 
 
-__version__ = "0.6.0"
+__version__ = "0.6.3"

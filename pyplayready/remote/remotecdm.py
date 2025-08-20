@@ -10,7 +10,7 @@ from pyplayready.cdm import Cdm
 from pyplayready.device import Device
 from pyplayready.license.key import Key
 
-from pyplayready.exceptions import (DeviceMismatch, InvalidInitData)
+from pyplayready.misc.exceptions import (DeviceMismatch, InvalidInitData)
 from pyplayready.system.wrmheader import WRMHeader
 
 

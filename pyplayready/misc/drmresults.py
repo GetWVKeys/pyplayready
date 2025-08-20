@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class DRMResult(Enum):
+class DrmResult(Enum):
     """Holds Playready DRM results (error codes and their messages)"""
 
     DRM_SUCCESS = (0x00000000, "Operation was successful.")
@@ -902,7 +902,7 @@ class DRMResult(Enum):
     @staticmethod
     def from_code(code: str):
         """Get the error message for a given error code."""
-        for error in DRMResult:
+        for error in DrmResult:
             if error.value[0] == int(code, 16):
                 return error
         raise ValueError("Invalid DRMResult")

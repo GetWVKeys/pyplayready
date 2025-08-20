@@ -4,7 +4,7 @@ import base64
 import time
 from typing import List, Union, Optional
 from uuid import UUID
-import xml.etree.ElementTree as ET
+from lxml import etree as ET
 
 import xmltodict
 from Crypto.Cipher import AES
@@ -16,12 +16,12 @@ from Crypto.Util.strxor import strxor
 from ecpy.curves import Point, Curve
 
 from pyplayready.crypto import Crypto
-from pyplayready.drmresults import DRMResult
+from pyplayready.misc.drmresults import DrmResult
 from pyplayready.system.bcert import CertificateChain
 from pyplayready.crypto.ecc_key import ECCKey
 from pyplayready.license.key import Key
 from pyplayready.license.xmrlicense import XMRLicense, XMRObjectTypes
-from pyplayready.exceptions import (InvalidSession, TooManySessions, InvalidLicense, ServerException)
+from pyplayready.misc.exceptions import (InvalidSession, TooManySessions, InvalidLicense, ServerException)
 from pyplayready.system.session import Session
 from pyplayready.system.wrmheader import WRMHeader
 
@@ -29,7 +29,10 @@ from pyplayready.system.wrmheader import WRMHeader
 class Cdm:
     MAX_NUM_OF_SESSIONS = 16
 
-    rgbMagicConstantZero = bytes.fromhex("7ee9ed4af773224f00b8ea7efb027cbb")
+    MagicConstantZero = bytes([
+        0x7e, 0xe9, 0xed, 0x4a, 0xf7, 0x73, 0x22, 0x4f,
+        0x00, 0xb8, 0xea, 0x7e, 0xfb, 0x02, 0x7c, 0xbb
+    ])
 
     def __init__(
             self,
@@ -288,13 +291,14 @@ class Cdm:
             raise InvalidSession("Cannot parse a license message without first making a license request")
 
         try:
-            root = ET.fromstring(licence)
+            parser = ET.XMLParser(remove_blank_text=True)
+            root = ET.XML(licence.encode(), parser)
             faults = root.findall(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault")
 
             for fault in faults:
                 status_codes = fault.findall(".//StatusCode")
                 for status_code in status_codes:
-                    code = DRMResult.from_code(status_code.text)
+                    code = DrmResult.from_code(status_code.text)
                     raise ServerException(f"[{status_code.text}] ({code.name}) {code.message}")
 
             license_elements = root.findall(".//{http://schemas.microsoft.com/DRM/2007/03/protocols}License")
@@ -328,7 +332,7 @@ class Cdm:
                             embedded_root_license = content_key.encrypted_key[:144]
                             embedded_leaf_license = content_key.encrypted_key[144:]
 
-                            rgb_key = strxor(ck, self.rgbMagicConstantZero)
+                            rgb_key = strxor(ck, self.MagicConstantZero)
                             content_key_prime = AES.new(ck, AES.MODE_ECB).encrypt(rgb_key)
 
                             aux_key = next(parsed_licence.get_object(XMRObjectTypes.AUX_KEY_OBJECT))["auxiliary_keys"][0]["key"]
@@ -352,6 +356,7 @@ class Cdm:
                         key=ck
                     ))
         except Exception as e:
+            raise
             raise InvalidLicense(f"Unable to parse license: {e}")
 
     def get_keys(self, session_id: bytes) -> List[Key]:

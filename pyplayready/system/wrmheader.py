@@ -33,7 +33,7 @@ class WRMHeader:
         def _missing_(cls, value):
             return cls.UNKNOWN
 
-    _RETURN_STRUCTURE = Tuple[List[SignedKeyID], Optional[str], Optional[str], Optional[str]]
+    _RETURN_STRUCTURE = Optional[Tuple[List[SignedKeyID], Optional[str], Optional[str], Optional[str]]]
 
     def __init__(self, data: Union[str, bytes]):
         """Load a WRM Header from either a string, base64 encoded data or bytes"""
@@ -140,6 +140,8 @@ class WRMHeader:
             return self._read_v4_2_0_0(data)
         elif self.version == self.Version.VERSION_4_3_0_0:
             return self._read_v4_3_0_0(data)
+
+        return None
 
     def dumps(self) -> str:
         return self._raw_data.decode("utf-16-le")

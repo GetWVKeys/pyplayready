@@ -6,3 +6,5 @@ click
 PyYAML
 aiohttp
 xmltodict
+cryptography
+lxml

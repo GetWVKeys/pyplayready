@@ -29,7 +29,7 @@ class ECCKey:
         if not isinstance(private_key, int):
             raise ValueError(f"Expecting Bytes or Int input, got {private_key!r}")
 
-        # The public is always derived from the private key; loading the other stuff won't work
+        # The public key is always derived from the private key; loading the other stuff won't work
         key = ECC.construct(
             curve='P-256',
             d=private_key,

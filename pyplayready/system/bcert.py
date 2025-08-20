@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 import collections.abc
 
 # monkey patch for construct 2.8.8 compatibility
 if not hasattr(collections, 'Sequence'):
     collections.Sequence = collections.abc.Sequence
 
+import time
 import base64
 from pathlib import Path
 from typing import Union, Optional
@@ -17,7 +19,7 @@ from construct import Int16ub, Array
 from construct import Struct, this
 
 from pyplayready.crypto import Crypto
-from pyplayready.exceptions import InvalidCertificateChain, InvalidCertificate
+from pyplayready.misc.exceptions import InvalidCertificateChain, InvalidCertificate
 from pyplayready.crypto.ecc_key import ECCKey
 
 
@@ -445,46 +447,91 @@ class Certificate(_BCertStructs):
             bcert_obj=cert
         )
 
-    def get_attribute(self, type_: int):
+    def get_attribute(self, type_: int) -> Optional[Container]:
         for attribute in self.parsed.attributes:
             if attribute.tag == type_:
                 return attribute
 
-    def get_security_level(self) -> int:
-        basic_info_attribute = self.get_attribute(BCertObjType.BASIC).attribute
-        if basic_info_attribute:
-            return basic_info_attribute.security_level
+        return None
 
-    @staticmethod
-    def _unpad(name: bytes):
-        return name.rstrip(b'\x00').decode("utf-8", errors="ignore")
+    def get_security_level(self) -> Optional[int]:
+        basic_info = self.get_attribute(BCertObjType.BASIC)
+        if basic_info:
+            return basic_info.attribute.security_level
 
-    def get_name(self):
-        manufacturer_info = self.get_attribute(BCertObjType.MANUFACTURER).attribute
+        return None
+
+    def get_name(self) -> Optional[str]:
+        manufacturer_info = self.get_attribute(BCertObjType.MANUFACTURER)
+
         if manufacturer_info:
-            return f"{self._unpad(manufacturer_info.manufacturer_name)} {self._unpad(manufacturer_info.model_name)} {self._unpad(manufacturer_info.model_number)}"
+            manufacturer_info_attr = manufacturer_info.attribute
+
+            def un_pad(name: bytes):
+                return name.rstrip(b'\x00').decode("utf-8", errors="ignore")
+
+            return f"{un_pad(manufacturer_info_attr.manufacturer_name)} {un_pad(manufacturer_info_attr.model_name)} {un_pad(manufacturer_info_attr.model_number)}"
+
+        return None
+
+    def get_type(self) -> Optional[int]:
+        basic_info = self.get_attribute(BCertObjType.BASIC)
+        if basic_info:
+            return basic_info.attribute.cert_type
+
+        return None
+
+    def get_expiration_date(self) -> Optional[int]:
+        basic_info = self.get_attribute(BCertObjType.BASIC)
+        if basic_info:
+            return basic_info.attribute.expiration_date
+
+        return None
 
     def get_issuer_key(self) -> Optional[bytes]:
+        signature_object = self.get_attribute(BCertObjType.SIGNATURE)
+        if not signature_object:
+            return None
+
+        return signature_object.attribute.signature_key
+
+    def get_key_by_usage(self, key_usage: BCertKeyUsage) -> Optional[bytes]:
         key_info_object = self.get_attribute(BCertObjType.KEY)
         if not key_info_object:
-            return
+            return None
 
-        key_info_attribute = key_info_object.attribute
-        return next(map(lambda key: key.key, filter(lambda key: 6 in key.usages, key_info_attribute.cert_keys)), None)
+        for key in key_info_object.attribute.cert_keys:
+            for usage in key.usages:
+                if usage == key_usage:
+                    return key.key
+
+        return None
+
+    def contains_public_key(self, public_key: Union[ECCKey, bytes]) -> bool:
+        if isinstance(public_key, ECCKey):
+            public_key = public_key.public_bytes()
+
+        key_info_object = self.get_attribute(BCertObjType.KEY)
+        if not key_info_object:
+            return False
+
+        for key in key_info_object.attribute.cert_keys:
+            if key.key == public_key:
+                return True
+
+        return False
 
     def dumps(self) -> bytes:
         return self._BCERT.build(self.parsed)
 
-    def verify(self, public_key: bytes, index: int):
+    def verify_signature(self) -> None:
         signature_object = self.get_attribute(BCertObjType.SIGNATURE)
         if not signature_object:
-            raise InvalidCertificate(f"No signature object found in certificate {index}")
+            raise InvalidCertificate(f"No signature object found in certificate")
 
         signature_attribute = signature_object.attribute
 
         raw_signature_key = signature_attribute.signature_key
-        if public_key != raw_signature_key:
-            raise InvalidCertificate(f"Signature keys of certificate {index} do not match")
 
         signature_key = ECC.construct(
             curve='P-256',
@@ -492,22 +539,25 @@ class Certificate(_BCertStructs):
             point_y=int.from_bytes(raw_signature_key[32:], 'big')
         )
 
-        sign_payload = self.dumps()[:-signature_object.length]
+        sign_payload = self.dumps()[:self.parsed.certificate_length]
 
         if not Crypto.ecc256_verify(
             public_key=signature_key,
             data=sign_payload,
             signature=signature_attribute.signature
         ):
-            raise InvalidCertificate(f"Signature of certificate {index} is not authentic")
-
-        return self.get_issuer_key()
+            raise InvalidCertificate(f"Signature of certificate is not authentic")
 
 
 class CertificateChain(_BCertStructs):
     """Represents a BCertChain"""
 
-    ECC256MSBCertRootIssuerPubKey = bytes.fromhex("864d61cff2256e422c568b3c28001cfb3e1527658584ba0521b79b1828d936de1d826a8fc3e6e7fa7a90d5ca2946f1f64a2efb9f5dcffe7e434eb44293fac5ab")
+    MSPlayReadyRootIssuerPubKey = bytes([
+        0x86, 0x4D, 0x61, 0xCF, 0xF2, 0x25, 0x6E, 0x42, 0x2C, 0x56, 0x8B, 0x3C, 0x28, 0x00, 0x1C, 0xFB,
+        0x3E, 0x15, 0x27, 0x65, 0x85, 0x84, 0xBA, 0x05, 0x21, 0xB7, 0x9B, 0x18, 0x28, 0xD9, 0x36, 0xDE,
+        0x1D, 0x82, 0x6A, 0x8F, 0xC3, 0xE6, 0xE7, 0xFA, 0x7A, 0x90, 0xD5, 0xCA, 0x29, 0x46, 0xF1, 0xF6,
+        0x4A, 0x2E, 0xFB, 0x9F, 0x5D, 0xCF, 0xFE, 0x7E, 0x43, 0x4E, 0xB4, 0x42, 0x93, 0xFA, 0xC5, 0xAB
+    ])
 
     def __init__(
             self,
@@ -541,24 +591,66 @@ class CertificateChain(_BCertStructs):
         return self._BCERT_CHAIN.build(self.parsed)
 
     def get_security_level(self) -> int:
-        # not sure if there's a better way than this
         return self.get(0).get_security_level()
 
     def get_name(self) -> str:
         return self.get(0).get_name()
 
-    def verify(self) -> bool:
-        issuer_key = self.ECC256MSBCertRootIssuerPubKey
+    def verify_chain(
+            self,
+            check_expiry: bool = False,
+            cert_type: Optional[BCertCertType] = None
+    ) -> bool:
+        # There should be 1-6 certificates in a chain
+        if not (1 <= self.count() <= 6):
+            raise InvalidCertificateChain("An invalid maximum license chain depth")
 
-        try:
-            for i in reversed(range(self.count())):
-                certificate = self.get(i)
-                issuer_key = certificate.verify(issuer_key, i)
+        for i in range(self.count()):
+            if i == 0 and cert_type:
+                if self.get(i).get_type() != cert_type:
+                    raise InvalidCertificateChain("Invalid certificate type")
 
-                if not issuer_key and i != 0:
-                    raise InvalidCertificate(f"Certificate {i} is not valid")
-        except InvalidCertificate as e:
-            raise InvalidCertificateChain(e)
+            self.get(i).verify_signature()
+
+            if check_expiry:
+                if time.time() >= self.get(i).get_expiration_date():
+                    raise InvalidCertificateChain(f"Certificate {i} has expired")
+
+            if i > 0:
+                if not self._verify_adjacent_certs(self.get(i - 1), self.get(i)):
+                    raise InvalidCertificateChain("Adjacent certificate validation failed")
+
+            if i == (self.count() - 1):
+                if self.get(i).get_issuer_key() != self.MSPlayReadyRootIssuerPubKey:
+                    raise InvalidCertificateChain("Root certificate issuer missmatch")
+
+        return True
+
+    @staticmethod
+    def _verify_adjacent_certs(child_cert: Certificate, parent_cert: Certificate) -> bool:
+        if parent_cert.get_type() != BCertCertType.ISSUER:
+            return False
+
+        if child_cert.get_security_level() > parent_cert.get_expiration_date():
+            return False
+
+        key_info = parent_cert.get_attribute(BCertObjType.KEY)
+        if not key_info:
+            return False
+
+        issuer_key = child_cert.get_issuer_key()
+
+        issuer_key_match = False
+        for key in key_info.attribute.cert_keys:
+            if key.key == issuer_key:
+                issuer_key_match = True
+
+        if not issuer_key_match:
+            return False
+
+        # TODO:
+        #  check issuer rights
+        #  check issuer features/key usages
 
         return True
 
