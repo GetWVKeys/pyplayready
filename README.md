@@ -1,4 +1,7 @@
 # pyplayready
+Imported from https://git.gay/ready-dl/pyplayready.git to fix an issue
+
+
 All of this is already public. Almost 100% of this code has been derived from the mspr_toolkit.
 
 ## Installation
