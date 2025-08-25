@@ -59,6 +59,10 @@ class PSSH(_PlayreadyPSSHStructs):
         try:
             # PSSH Box -> PlayReady Header
             box = self.PsshBox.parse(data)
+
+            if box.system_id != self.SYSTEM_ID.bytes:
+                raise InvalidPssh(f"PSSH Box is not PlayReady (System ID: {box.system_id.hex()})")
+        
             if self._is_utf_16_le(box.data):
                 self.wrm_headers = [WRMHeader(box.data)]
             else:
